@@ -25,7 +25,7 @@ body{
   justify-content:center;
   text-align:center;
   padding:24px;
-  font-size:96px; /* ค่าเริ่มต้น XL */
+  font-size:96px;
   line-height:1.25;
   word-break:break-word;
 }
@@ -38,14 +38,14 @@ body{
   display:none;
 }
 .controls{
-  padding:14px;
+  padding:16px;
   display:flex;
   gap:10px;
 }
 button{
   flex:1;
-  font-size:32px;
-  padding:22px;
+  font-size:34px;
+  padding:24px;
   border:none;
   border-radius:18px;
   font-weight:bold;
@@ -64,7 +64,7 @@ button{
 <body>
 
 <div id="text"></div>
-<div id="status">🎤 กำลังฟัง… <span id="timer">00:00</span></div>
+<div id="status">🎤 กำลังฟัง… <span id="timer">0</span></div>
 
 <div class="controls">
   <button class="size" id="minus">A−</button>
@@ -74,36 +74,26 @@ button{
 
 <script>
 /* ===== CONFIG ===== */
-const WAIT_MS = 10000; // รอเสียง 10 วินาที
-const FONT_SIZES = [72, 96, 120, 150]; // L, XL, XXL, XXXL
+const MAX_WAIT = 10; // วินาที
 
-/* ===== ELEMENTS ===== */
+/* ===== ELEMENT ===== */
 const textDiv = document.getElementById("text");
 const statusDiv = document.getElementById("status");
 const timerSpan = document.getElementById("timer");
 const micBtn = document.getElementById("mic");
-const plusBtn = document.getElementById("plus");
-const minusBtn = document.getElementById("minus");
 
-/* ===== FONT SIZE ===== */
-let fontIndex = 1; // เริ่มที่ XL
+/* ===== FONT ===== */
+const FONT_SIZES = [72,96,120,150];
+let fontIndex = 1;
 function applyFont(){
-  textDiv.style.fontSize = FONT_SIZES[fontIndex] + "px";
+  textDiv.style.fontSize = FONT_SIZES[fontIndex]+"px";
 }
 applyFont();
-
-plusBtn.onclick = () => {
-  if (fontIndex < FONT_SIZES.length - 1) {
-    fontIndex++;
-    applyFont();
-  }
+document.getElementById("plus").onclick=()=>{
+  if(fontIndex<FONT_SIZES.length-1){fontIndex++;applyFont();}
 };
-
-minusBtn.onclick = () => {
-  if (fontIndex > 0) {
-    fontIndex--;
-    applyFont();
-  }
+document.getElementById("minus").onclick=()=>{
+  if(fontIndex>0){fontIndex--;applyFont();}
 };
 
 /* ===== SPEECH ===== */
@@ -112,109 +102,67 @@ const SpeechRecognition =
 
 const recog = new SpeechRecognition();
 recog.lang = "th-TH";
-recog.continuous = true;
+recog.continuous = false; // สำคัญ: ฟังเป็นรอบ
 recog.interimResults = false;
 
 /* ===== STATE ===== */
 let listening = false;
 let seconds = 0;
-let blinkInterval, timeInterval, autoStopTimer;
-
-/* ===== UTILS ===== */
-function fmt(sec){
-  const m = String(Math.floor(sec/60)).padStart(2,"0");
-  const s = String(sec%60).padStart(2,"0");
-  return `${m}:${s}`;
-}
+let timerInterval;
 
 /* ===== BUTTON ===== */
 micBtn.onclick = () => {
-  listening ? stopListen() : startListen();
+  if (listening) stopListening();
+  else startListening();
 };
 
-function startListen(){
+function startListening(){
   listening = true;
-  recog.start();
-}
+  seconds = 0;
+  timerSpan.innerText = "0";
+  statusDiv.style.display = "block";
 
-function stopListen(){
-  listening = false;
-  clearTimeout(autoStopTimer);
-  recog.stop();
-}
-
-/* ===== EVENTS ===== */
-recog.onstart = () => {
   micBtn.innerText = "⏹️ หยุด";
   micBtn.style.background = "#ff5252";
 
-  seconds = 0;
-  timerSpan.innerText = "00:00";
-  statusDiv.style.display = "block";
+  recog.start();
 
-  blinkInterval = setInterval(() => {
-    statusDiv.style.visibility =
-      statusDiv.style.visibility === "hidden" ? "visible" : "hidden";
-  }, 800);
-
-  timeInterval = setInterval(() => {
+  timerInterval = setInterval(()=>{
     seconds++;
-    timerSpan.innerText = fmt(seconds);
-  }, 1000);
+    timerSpan.innerText = seconds;
 
-  resetAutoStop();
-};
+    if(seconds >= MAX_WAIT){
+      stopListening();
+    }
+  },1000);
+}
 
-recog.onresult = (e) => {
-  const txt = e.results[e.results.length-1][0].transcript.trim();
+function stopListening(){
+  listening = false;
+  clearInterval(timerInterval);
+  recog.stop();
 
-  // พูด 1 ประโยค = หน้าใหม่
-  textDiv.innerText = txt;
-
-  resetAutoStop();
-};
-
-recog.onend = () => {
-  clearInterval(blinkInterval);
-  clearInterval(timeInterval);
-
-  if (listening) {
-    // Speech API หยุดเอง → เริ่มใหม่อัตโนมัติ
-    setTimeout(() => recog.start(), 300);
-    return;
-  }
-
+  statusDiv.style.display = "none";
   micBtn.innerText = "▶️ เริ่มพูด";
   micBtn.style.background = "#1db954";
-  statusDiv.style.display = "none";
-  statusDiv.style.visibility = "visible";
+}
+
+/* ===== RESULT ===== */
+recog.onresult = (e)=>{
+  const txt = e.results[0][0].transcript.trim();
+  textDiv.innerText = txt;
+
+  // พอพูดแล้ว → จบรอบทันที
+  stopListening();
 };
 
-/* ===== AUTO STOP ===== */
-function resetAutoStop(){
-  clearTimeout(autoStopTimer);
-  autoStopTimer = setTimeout(() => {
-    stopListen();
-  }, WAIT_MS);
-}
-
-/* ===== PWA (ไฟล์เดียว) ===== */
-if ("serviceWorker" in navigator) {
-  const swCode = `
-    self.addEventListener('install',e=>{
-      e.waitUntil(
-        caches.open('talk-pwa').then(c=>c.addAll(['./']))
-      );
-    });
-    self.addEventListener('fetch',e=>{
-      e.respondWith(
-        caches.match(e.request).then(r=>r||fetch(e.request))
-      );
-    });
-  `;
-  const blob = new Blob([swCode], {type:"text/javascript"});
-  navigator.serviceWorker.register(URL.createObjectURL(blob));
-}
+/* ===== ERROR / END ===== */
+recog.onerror = ()=> stopListening();
+recog.onend = ()=> {
+  if(listening===false){
+    clearInterval(timerInterval);
+  }
+};
 </script>
 
 </body>
