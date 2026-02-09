@@ -1,9 +1,13 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>พูด → ตัวอักษรใหญ่</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>พูดเป็นข้อความ ตัวอักษรใหญ่</title>
+
+<!-- PWA Meta -->
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
 
 <style>
   body {
@@ -11,115 +15,192 @@
     background: black;
     color: white;
     font-family: system-ui, sans-serif;
+    height: 100vh;
     display: flex;
     flex-direction: column;
-    height: 100vh;
   }
-
   #text {
     flex: 1;
     padding: 20px;
-    font-size: 72px; /* XL */
+    font-size: 72px;
     line-height: 1.3;
     overflow-y: auto;
     word-break: break-word;
   }
-
+  #status {
+    text-align: center;
+    font-size: 36px;
+    font-weight: bold;
+    padding: 10px;
+    color: #00ff00;
+    display: none;
+  }
   .controls {
     display: flex;
     gap: 10px;
     padding: 15px;
-    background: #000;
   }
-
   button {
     flex: 1;
-    font-size: 28px;
-    padding: 20px;
+    font-size: 30px;
+    padding: 22px;
     border: none;
-    border-radius: 14px;
+    border-radius: 16px;
     font-weight: bold;
   }
-
-  #mic {
-    background: #1db954;
-    color: black;
-  }
-
-  #clear {
-    background: #b00020;
-    color: white;
-  }
-
-  #access {
-    background: #333;
-    color: white;
-  }
+  #mic { background: #1db954; color: black; }
+  #clear { background: #b00020; color: white; }
+  #access { background: #333; color: white; }
 </style>
 </head>
 
 <body>
 
 <div id="text"></div>
+<div id="status">🎤 กำลังฟัง… <span id="timer">00:00</span></div>
 
 <div class="controls">
-  <button id="mic">🎤 พูด</button>
+  <button id="mic">🎤 เริ่มพูด</button>
   <button id="clear">🧹 ล้าง</button>
   <button id="access">⚙️ เมนู</button>
 </div>
 
 <script>
-  const textDiv = document.getElementById("text");
+/* ---------- Speech ---------- */
+const textDiv = document.getElementById("text");
+const statusDiv = document.getElementById("status");
+const timerSpan = document.getElementById("timer");
+const micBtn = document.getElementById("mic");
 
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  const recog = new SpeechRecognition();
-  recog.lang = "th-TH";
-  recog.continuous = true;
-  recog.interimResults = false;
+const recog = new SpeechRecognition();
+recog.lang = "th-TH";
+recog.continuous = true;
+recog.interimResults = false;
 
-  recog.onresult = (event) => {
-    const last = event.results[event.results.length - 1][0].transcript;
-    textDiv.innerText += last + "\n";
-    textDiv.scrollTop = textDiv.scrollHeight;
-  };
+let listening = false;
+let blinkInterval, timeInterval, silenceTimer;
+let seconds = 0;
 
-  document.getElementById("mic").onclick = () => {
-    recog.start();
-  };
+function formatTime(sec) {
+  const m = String(Math.floor(sec / 60)).padStart(2, "0");
+  const s = String(sec % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
 
-  // กดค้างเพื่อล้าง
-  let clearTimer;
-  const clearBtn = document.getElementById("clear");
+// เริ่มฟัง
+function startListening() {
+  recog.start();
+}
 
-  clearBtn.onmousedown = () => {
-    clearTimer = setTimeout(() => {
-      textDiv.innerText = "";
-    }, 1000);
-  };
+// หยุดฟัง
+function stopListening() {
+  recog.stop();
+}
 
-  clearBtn.onmouseup = clearBtn.onmouseleave = () => {
-    clearTimeout(clearTimer);
-  };
+// toggle ปุ่มเดียว
+micBtn.onclick = () => {
+  listening ? stopListening() : startListening();
+};
 
-  // เมนู Accessibility (เวอร์ชันง่าย)
-  document.getElementById("access").onclick = () => {
-    const choice = prompt(
-      "Accessibility\n1 = XL\n2 = XXL\n3 = ขาว/ดำ\n4 = เหลือง/ดำ"
-    );
+recog.onstart = () => {
+  listening = true;
+  statusDiv.style.display = "block";
+  micBtn.innerText = "⏹️ หยุด";
+  micBtn.style.background = "#ff5252";
 
-    if (choice === "1") textDiv.style.fontSize = "72px";
-    if (choice === "2") textDiv.style.fontSize = "120px";
-    if (choice === "3") {
-      document.body.style.background = "black";
-      document.body.style.color = "white";
-    }
-    if (choice === "4") {
-      document.body.style.background = "black";
-      document.body.style.color = "yellow";
-    }
-  };
+  seconds = 0;
+  timerSpan.innerText = "00:00";
+
+  blinkInterval = setInterval(() => {
+    statusDiv.style.visibility =
+      statusDiv.style.visibility === "hidden" ? "visible" : "hidden";
+  }, 800);
+
+  timeInterval = setInterval(() => {
+    seconds++;
+    timerSpan.innerText = formatTime(seconds);
+  }, 1000);
+};
+
+recog.onresult = (event) => {
+  const last = event.results[event.results.length - 1][0].transcript.trim();
+  textDiv.innerText += last;
+
+  // ตรวจจบประโยคจากเครื่องหมาย
+  if (/[.!?]$/.test(last)) {
+    textDiv.innerText += "\n";
+  } else {
+    textDiv.innerText += " ";
+  }
+
+  textDiv.scrollTop = textDiv.scrollHeight;
+
+  // ตรวจเงียบ
+  clearTimeout(silenceTimer);
+  silenceTimer = setTimeout(() => {
+    textDiv.innerText += "\n";
+  }, 1200);
+};
+
+recog.onend = () => {
+  listening = false;
+  statusDiv.style.display = "none";
+  statusDiv.style.visibility = "visible";
+  micBtn.innerText = "🎤 เริ่มพูด";
+  micBtn.style.background = "#1db954";
+  clearInterval(blinkInterval);
+  clearInterval(timeInterval);
+};
+
+/* ---------- Clear (กดค้าง) ---------- */
+let clearTimer;
+document.getElementById("clear").onmousedown = () => {
+  clearTimer = setTimeout(() => textDiv.innerText = "", 1000);
+};
+document.getElementById("clear").onmouseup =
+document.getElementById("clear").onmouseleave = () =>
+  clearTimeout(clearTimer);
+
+/* ---------- Accessibility ---------- */
+document.getElementById("access").onclick = () => {
+  const c = prompt(
+    "Accessibility\n1 = XL\n2 = XXL\n3 = ขาว/ดำ\n4 = เหลือง/ดำ"
+  );
+  if (c === "1") textDiv.style.fontSize = "72px";
+  if (c === "2") textDiv.style.fontSize = "120px";
+  if (c === "3") {
+    document.body.style.background = "black";
+    document.body.style.color = "white";
+  }
+  if (c === "4") {
+    document.body.style.background = "black";
+    document.body.style.color = "yellow";
+  }
+};
+
+/* ---------- PWA Service Worker (ไฟล์เดียว) ---------- */
+if ("serviceWorker" in navigator) {
+  const swCode = `
+    self.addEventListener('install', e => {
+      e.waitUntil(
+        caches.open('talk-pwa').then(cache =>
+          cache.addAll(['./'])
+        )
+      );
+    });
+    self.addEventListener('fetch', e => {
+      e.respondWith(
+        caches.match(e.request).then(r => r || fetch(e.request))
+      );
+    });
+  `;
+  const blob = new Blob([swCode], { type: "text/javascript" });
+  const swURL = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swURL);
+}
 </script>
 
 </body>
