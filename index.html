@@ -25,7 +25,7 @@ body{
   justify-content:center;
   text-align:center;
   padding:24px;
-  font-size:96px;
+  font-size:96px; /* ค่าเริ่มต้น XL */
   line-height:1.25;
   word-break:break-word;
 }
@@ -38,19 +38,25 @@ body{
   display:none;
 }
 .controls{
-  padding:16px;
+  padding:14px;
+  display:flex;
+  gap:10px;
 }
 button{
-  width:100%;
-  font-size:36px;
-  padding:26px;
+  flex:1;
+  font-size:32px;
+  padding:22px;
   border:none;
-  border-radius:20px;
+  border-radius:18px;
   font-weight:bold;
 }
 #mic{
   background:#1db954;
   color:black;
+}
+.size{
+  background:#333;
+  color:white;
 }
 </style>
 </head>
@@ -61,18 +67,44 @@ button{
 <div id="status">🎤 กำลังฟัง… <span id="timer">00:00</span></div>
 
 <div class="controls">
+  <button class="size" id="minus">A−</button>
   <button id="mic">▶️ เริ่มพูด</button>
+  <button class="size" id="plus">A+</button>
 </div>
 
 <script>
 /* ===== CONFIG ===== */
 const WAIT_MS = 10000; // รอเสียง 10 วินาที
+const FONT_SIZES = [72, 96, 120, 150]; // L, XL, XXL, XXXL
 
 /* ===== ELEMENTS ===== */
 const textDiv = document.getElementById("text");
 const statusDiv = document.getElementById("status");
 const timerSpan = document.getElementById("timer");
 const micBtn = document.getElementById("mic");
+const plusBtn = document.getElementById("plus");
+const minusBtn = document.getElementById("minus");
+
+/* ===== FONT SIZE ===== */
+let fontIndex = 1; // เริ่มที่ XL
+function applyFont(){
+  textDiv.style.fontSize = FONT_SIZES[fontIndex] + "px";
+}
+applyFont();
+
+plusBtn.onclick = () => {
+  if (fontIndex < FONT_SIZES.length - 1) {
+    fontIndex++;
+    applyFont();
+  }
+};
+
+minusBtn.onclick = () => {
+  if (fontIndex > 0) {
+    fontIndex--;
+    applyFont();
+  }
+};
 
 /* ===== SPEECH ===== */
 const SpeechRecognition =
@@ -152,7 +184,6 @@ recog.onend = () => {
     return;
   }
 
-  // หยุดจริง
   micBtn.innerText = "▶️ เริ่มพูด";
   micBtn.style.background = "#1db954";
   statusDiv.style.display = "none";
