@@ -3,53 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>พูด → ข้อความ ตัวอักษรใหญ่</title>
+<title>พูด → ตัวอักษรใหญ่</title>
 
-<!-- PWA -->
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 
 <style>
-  body{
-    margin:0;
-    background:black;
-    color:white;
-    font-family:system-ui,sans-serif;
-    height:100vh;
-    display:flex;
-    flex-direction:column;
-  }
-  #text{
-    flex:1;
-    padding:24px;
-    font-size:96px;   /* ใหญ่มาก */
-    line-height:1.25;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    text-align:center;
-    word-break:break-word;
-  }
-  #status{
-    text-align:center;
-    font-size:36px;
-    font-weight:bold;
-    padding:10px;
-    color:#00ff00;
-    display:none;
-  }
-  .controls{
-    padding:16px;
-  }
-  button{
-    width:100%;
-    font-size:34px;
-    padding:24px;
-    border:none;
-    border-radius:18px;
-    font-weight:bold;
-  }
-  #mic{ background:#1db954; color:black; }
+body{
+  margin:0;
+  background:black;
+  color:white;
+  font-family:system-ui,sans-serif;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+#text{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:24px;
+  font-size:96px;
+  line-height:1.25;
+  word-break:break-word;
+}
+#status{
+  text-align:center;
+  font-size:36px;
+  font-weight:bold;
+  color:#00ff00;
+  padding:10px;
+  display:none;
+}
+.controls{
+  padding:16px;
+}
+button{
+  width:100%;
+  font-size:36px;
+  padding:26px;
+  border:none;
+  border-radius:20px;
+  font-weight:bold;
+}
+#mic{
+  background:#1db954;
+  color:black;
+}
 </style>
 </head>
 
@@ -63,12 +65,16 @@
 </div>
 
 <script>
-/* ===== Speech ===== */
+/* ===== CONFIG ===== */
+const WAIT_MS = 10000; // รอเสียง 10 วินาที
+
+/* ===== ELEMENTS ===== */
 const textDiv = document.getElementById("text");
 const statusDiv = document.getElementById("status");
 const timerSpan = document.getElementById("timer");
 const micBtn = document.getElementById("mic");
 
+/* ===== SPEECH ===== */
 const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -77,69 +83,93 @@ recog.lang = "th-TH";
 recog.continuous = true;
 recog.interimResults = false;
 
-let listening=false;
-let seconds=0;
-let blinkInterval, timeInterval, silenceTimer;
+/* ===== STATE ===== */
+let listening = false;
+let seconds = 0;
+let blinkInterval, timeInterval, autoStopTimer;
 
+/* ===== UTILS ===== */
 function fmt(sec){
-  const m=String(Math.floor(sec/60)).padStart(2,"0");
-  const s=String(sec%60).padStart(2,"0");
+  const m = String(Math.floor(sec/60)).padStart(2,"0");
+  const s = String(sec%60).padStart(2,"0");
   return `${m}:${s}`;
 }
 
-micBtn.onclick=()=>{
-  listening ? recog.stop() : recog.start();
+/* ===== BUTTON ===== */
+micBtn.onclick = () => {
+  listening ? stopListen() : startListen();
 };
 
-recog.onstart=()=>{
-  listening=true;
-  micBtn.innerText="⏹️ หยุด";
-  micBtn.style.background="#ff5252";
+function startListen(){
+  listening = true;
+  recog.start();
+}
 
-  seconds=0;
-  timerSpan.innerText="00:00";
-  statusDiv.style.display="block";
+function stopListen(){
+  listening = false;
+  clearTimeout(autoStopTimer);
+  recog.stop();
+}
 
-  blinkInterval=setInterval(()=>{
-    statusDiv.style.visibility=
-      statusDiv.style.visibility==="hidden"?"visible":"hidden";
-  },800);
+/* ===== EVENTS ===== */
+recog.onstart = () => {
+  micBtn.innerText = "⏹️ หยุด";
+  micBtn.style.background = "#ff5252";
 
-  timeInterval=setInterval(()=>{
+  seconds = 0;
+  timerSpan.innerText = "00:00";
+  statusDiv.style.display = "block";
+
+  blinkInterval = setInterval(() => {
+    statusDiv.style.visibility =
+      statusDiv.style.visibility === "hidden" ? "visible" : "hidden";
+  }, 800);
+
+  timeInterval = setInterval(() => {
     seconds++;
-    timerSpan.innerText=fmt(seconds);
-  },1000);
+    timerSpan.innerText = fmt(seconds);
+  }, 1000);
+
+  resetAutoStop();
 };
 
-recog.onresult=(e)=>{
-  const txt=e.results[e.results.length-1][0].transcript.trim();
+recog.onresult = (e) => {
+  const txt = e.results[e.results.length-1][0].transcript.trim();
 
-  // หน้าใหม่อัตโนมัติ (ล้างก่อน)
-  textDiv.innerText=txt;
+  // พูด 1 ประโยค = หน้าใหม่
+  textDiv.innerText = txt;
 
-  // ถ้ามีเครื่องหมายจบประโยค ถือว่าจบ
-  if (/[.!?]$/.test(txt)) {
-    // ไม่ต้องทำอะไรเพิ่ม แสดงค้างไว้
-  }
-
-  // เงียบเกิน 1.2 วิ = ถือว่าจบ
-  clearTimeout(silenceTimer);
-  silenceTimer=setTimeout(()=>{},1200);
+  resetAutoStop();
 };
 
-recog.onend=()=>{
-  listening=false;
-  micBtn.innerText="▶️ เริ่มพูด";
-  micBtn.style.background="#1db954";
-  statusDiv.style.display="none";
-  statusDiv.style.visibility="visible";
+recog.onend = () => {
   clearInterval(blinkInterval);
   clearInterval(timeInterval);
+
+  if (listening) {
+    // Speech API หยุดเอง → เริ่มใหม่อัตโนมัติ
+    setTimeout(() => recog.start(), 300);
+    return;
+  }
+
+  // หยุดจริง
+  micBtn.innerText = "▶️ เริ่มพูด";
+  micBtn.style.background = "#1db954";
+  statusDiv.style.display = "none";
+  statusDiv.style.visibility = "visible";
 };
 
-/* ===== PWA Service Worker (ไฟล์เดียว) ===== */
+/* ===== AUTO STOP ===== */
+function resetAutoStop(){
+  clearTimeout(autoStopTimer);
+  autoStopTimer = setTimeout(() => {
+    stopListen();
+  }, WAIT_MS);
+}
+
+/* ===== PWA (ไฟล์เดียว) ===== */
 if ("serviceWorker" in navigator) {
-  const sw=`
+  const swCode = `
     self.addEventListener('install',e=>{
       e.waitUntil(
         caches.open('talk-pwa').then(c=>c.addAll(['./']))
@@ -151,7 +181,7 @@ if ("serviceWorker" in navigator) {
       );
     });
   `;
-  const blob=new Blob([sw],{type:"text/javascript"});
+  const blob = new Blob([swCode], {type:"text/javascript"});
   navigator.serviceWorker.register(URL.createObjectURL(blob));
 }
 </script>
