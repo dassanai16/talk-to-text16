@@ -74,7 +74,8 @@ button{
 
 <script>
 /* ===== CONFIG ===== */
-const MAX_WAIT = 10; // วินาที
+const MAX_WAIT = 10;       // ฟังสูงสุด 10 วิ
+const KEEP_ALIVE = 2500;  // ต่อไมค์ทุก 2.5 วิ
 
 /* ===== ELEMENT ===== */
 const textDiv = document.getElementById("text");
@@ -83,10 +84,10 @@ const timerSpan = document.getElementById("timer");
 const micBtn = document.getElementById("mic");
 
 /* ===== FONT ===== */
-const FONT_SIZES = [72,96,120,150];
-let fontIndex = 1;
+const FONT_SIZES=[72,96,120,150];
+let fontIndex=1;
 function applyFont(){
-  textDiv.style.fontSize = FONT_SIZES[fontIndex]+"px";
+  textDiv.style.fontSize=FONT_SIZES[fontIndex]+"px";
 }
 applyFont();
 document.getElementById("plus").onclick=()=>{
@@ -101,68 +102,70 @@ const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
 
 const recog = new SpeechRecognition();
-recog.lang = "th-TH";
-recog.continuous = false; // สำคัญ: ฟังเป็นรอบ
-recog.interimResults = false;
+recog.lang="th-TH";
+recog.continuous=false;
+recog.interimResults=false;
 
 /* ===== STATE ===== */
-let listening = false;
-let seconds = 0;
-let timerInterval;
+let listening=false;
+let seconds=0;
+let timerInterval, keepAliveInterval;
 
-/* ===== BUTTON ===== */
-micBtn.onclick = () => {
-  if (listening) stopListening();
-  else startListening();
+/* ===== CONTROL ===== */
+micBtn.onclick=()=>{
+  listening ? stopListening() : startListening();
 };
 
 function startListening(){
-  listening = true;
-  seconds = 0;
-  timerSpan.innerText = "0";
-  statusDiv.style.display = "block";
+  listening=true;
+  seconds=0;
+  timerSpan.innerText="0";
+  statusDiv.style.display="block";
 
-  micBtn.innerText = "⏹️ หยุด";
-  micBtn.style.background = "#ff5252";
+  micBtn.innerText="⏹️ หยุด";
+  micBtn.style.background="#ff5252";
 
-  recog.start();
+  startRecognizer();
 
-  timerInterval = setInterval(()=>{
+  timerInterval=setInterval(()=>{
     seconds++;
-    timerSpan.innerText = seconds;
-
-    if(seconds >= MAX_WAIT){
-      stopListening();
-    }
+    timerSpan.innerText=seconds;
+    if(seconds>=MAX_WAIT) stopListening();
   },1000);
+
+  // 👇 หัวใจของการแก้ปัญหา
+  keepAliveInterval=setInterval(()=>{
+    if(listening){
+      try{ recog.stop(); }catch(e){}
+      setTimeout(()=>startRecognizer(),100);
+    }
+  },KEEP_ALIVE);
+}
+
+function startRecognizer(){
+  try{ recog.start(); }catch(e){}
 }
 
 function stopListening(){
-  listening = false;
+  listening=false;
   clearInterval(timerInterval);
-  recog.stop();
+  clearInterval(keepAliveInterval);
+  try{ recog.stop(); }catch(e){}
 
-  statusDiv.style.display = "none";
-  micBtn.innerText = "▶️ เริ่มพูด";
-  micBtn.style.background = "#1db954";
+  statusDiv.style.display="none";
+  micBtn.innerText="▶️ เริ่มพูด";
+  micBtn.style.background="#1db954";
 }
 
 /* ===== RESULT ===== */
-recog.onresult = (e)=>{
-  const txt = e.results[0][0].transcript.trim();
-  textDiv.innerText = txt;
-
-  // พอพูดแล้ว → จบรอบทันที
+recog.onresult=(e)=>{
+  const txt=e.results[0][0].transcript.trim();
+  textDiv.innerText=txt;
   stopListening();
 };
 
-/* ===== ERROR / END ===== */
-recog.onerror = ()=> stopListening();
-recog.onend = ()=> {
-  if(listening===false){
-    clearInterval(timerInterval);
-  }
-};
+recog.onerror=()=>{};
+recog.onend=()=>{};
 </script>
 
 </body>
